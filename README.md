@@ -9,7 +9,7 @@ A Discord support bot for Emirates. A passenger messages the bot by DM, chooses 
 - Welcome and connection embeds in the DM and support thread.
 - Two-way relay: passenger messages go to the thread, and staff thread messages go back to the passenger as embeds.
 - `/close [reason]` closes the request, sends a green closing embed, locks the thread, and archives it.
-- Small HTTP health server for Render web services.
+- Small HTTP health server for Railway health checks.
 
 ## Discord setup
 
@@ -28,14 +28,16 @@ npm start
 
 Copy `.env.example` to `.env` and provide `DISCORD_TOKEN` before starting. The bot reads environment variables directly; use a local environment loader or export them in your shell.
 
-## Render deployment
+## Railway deployment
 
-Create a new Render Blueprint from this repository, or create a Node web service with:
+Create a new Railway project and deploy this repository from GitHub. Railway will detect the Node project from `package.json`.
+
+In the service settings, use:
 
 - Build command: `npm install`
 - Start command: `npm start`
 - Health check path: `/health`
 
-Add `DISCORD_TOKEN` as a secret environment variable. The channel and role IDs already have the requested defaults, but they can be overridden in Render environment variables.
+Add `DISCORD_TOKEN` as a secret variable. The channel and role IDs already have the requested defaults, but they can be overridden in Railway variables.
 
-Render's local filesystem is not persistent across deploys. If open tickets must survive restarts, attach a disk and set `TICKETS_PATH` to a file on that disk, such as `/data/tickets.json`.
+Railway's local filesystem is not persistent across deploys. If open tickets must survive restarts, attach a volume mounted at `/data` and set `TICKETS_PATH=/data/tickets.json`.
