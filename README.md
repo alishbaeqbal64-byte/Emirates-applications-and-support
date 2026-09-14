@@ -3,7 +3,7 @@
 A Discord support-system bot built with **discord.js v14**. Passengers DM the
 bot, pick a support type from a dropdown, and chat with staff through a relay
 thread — no server access required on their end. Configured for one-click
-deployment on Render.
+deployment on Railway.
 
 ## How it works
 
@@ -38,6 +38,7 @@ for the target server — only `DISCORD_TOKEN` is required:
 | `GUILD_ID` | No | auto-detected | Server ID; slash commands register per-guild (instant) when set, global otherwise |
 | `STAFF_ROLE_ID` | No | — | Extra role allowed to use `/close` (manage-messages/thread perms always work) |
 | `CLOSE_PING_ROLE_ID` | No | — | Role shown and pinged in the closing embed's *Ping* line (e.g. Executive Board) |
+| `TICKETS_PATH` | No | `<project>/tickets.json` | Where the open-ticket registry is written; point into a mounted volume to persist it |
 
 ## Running locally
 
@@ -53,31 +54,37 @@ for the target server — only `DISCORD_TOKEN` is required:
    npm start
    ```
 
-## Deploying on Render
+## Deploying on Railway
 
-The repo ships with a `render.yaml` blueprint and a small built-in HTTP health
-server (binds `PORT`, reports status), so it deploys as a Render **Web
-Service** — including on the free plan.
+The repo ships with a `railway.json` (Nixpacks build, `npm start`, auto-restart
+on failure), so Railway needs zero extra setup beyond the token.
 
-**Option A — Blueprint (recommended):**
-1. Render Dashboard → **New** → **Blueprint** → pick this repository.
-2. Render reads `render.yaml` automatically; set the `DISCORD_TOKEN` prompt.
-3. **Apply** — done.
+**Option A — GitHub deploy (recommended):**
+1. Railway Dashboard → **New Project** → **Deploy from GitHub repo** → pick
+   this repository.
+2. In the service → **Variables** → add `DISCORD_TOKEN` (everything else is
+   already defaulted).
+3. Deploy — Railway runs `npm install` then `npm start`. Set the `TOKEN`
+   variable first or the process will exit until the token is present.
 
-**Option B — Manual:**
-1. Render Dashboard → **New** → **Web Service** → connect the repo.
-2. Runtime **Node**, Build `npm install`, Start `npm start`.
-3. Add the environment variables from the table above (minimum:
-   `DISCORD_TOKEN`).
-4. Create the service.
+**Option B — CLI:**
+```
+npm install -g @railway/cli
+railway login
+railway init          # in this repo
+railway variables --set "DISCORD_TOKEN=your-bot-token"
+railway up
+```
 
-**Caveats:**
-- Render's free plan uses an **ephemeral disk**: `tickets.json` (the open-ticket
-  registry) resets on every deploy or restart, so relays for tickets open at
-  deploy time stop working. Close requests before deploying, or attach a Render
-  disk / move to the Background Worker type with persistence if that matters.
-- The dropdown and Close button survive restarts on a persistent disk; on an
-  ephemeral one, users just DM the bot again to restart the flow.
+**Persistence (optional but recommended):** Railway's filesystem is ephemeral
+across deploys. To keep the open-ticket registry alive, attach a **Volume**
+mounted at `/data` in the service settings and set the variable
+`TICKETS_PATH=/data/tickets.json`. Without it, tickets open at deploy time
+stop relaying after a redeploy — close requests before deploying, or accept
+the reset.
+
+The dropdown and Close button use fixed custom IDs, so they keep working
+across restarts and redeploys.
 
 ## Discord setup
 
@@ -103,5 +110,5 @@ Service** — including on the free plan.
 
 - `/close` accepts an optional `reason` that replaces the default
   "Support request closed." message in the closing embed.
-- The dropdown and Close button use fixed custom IDs, so they keep working
-  after restarts/redeploys (given persistent ticket storage).
+- A small HTTP health server binds `PORT` (default 3000) and reports status —
+  useful for host health checks; the bot itself never requires inbound access.

@@ -16,8 +16,8 @@
  *      posted in the thread, the user receives a copy, and the thread is
  *      archived and locked.
  *
- * Configuration is environment-only so it deploys cleanly on Render
- * (see .env.example for local runs and render.yaml for deployment).
+ * Configuration is environment-only so it deploys cleanly on Railway
+ * (see .env.example for local runs and railway.json for deployment).
  */
 
 'use strict';
@@ -87,7 +87,9 @@ const config = {
 // Ticket storage (survives restarts; note Render's free disk is ephemeral)
 // --------------------------------------------------------------------------- //
 
-const TICKETS_PATH = path.join(__dirname, 'tickets.json');
+// Override (e.g. TICKETS_PATH=/data/tickets.json) to store the registry in a
+// mounted volume on hosts like Railway; defaults to the project directory.
+const TICKETS_PATH = process.env.TICKETS_PATH || path.join(__dirname, 'tickets.json');
 const tickets = new Map(); // userId -> { userId, threadId, type }
 const threadsToUsers = new Map(); // threadId -> userId
 const pendingOpeners = new Map(); // userId -> the DM that triggered the dropdown
@@ -459,7 +461,7 @@ client.once(Events.ClientReady, async (readyClient) => {
 });
 
 // --------------------------------------------------------------------------- //
-// Health-check HTTP server (keeps Render web-service deploys happy)
+// Health-check HTTP server (optional; useful for host health checks)
 // --------------------------------------------------------------------------- //
 
 const PORT = Number(process.env.PORT) || 3000;
