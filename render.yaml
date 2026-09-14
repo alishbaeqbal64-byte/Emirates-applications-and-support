@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: emirates-support-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: SUPPORT_CHANNEL_ID
+        value: "1549096181903401130"
+      - key: GENERAL_ROLE_IDS
+        value: "1449091238107283639,1473706134467510364"
+      - key: PARTNERSHIP_ROLE_IDS
+        value: "1468302255181529295,1475109255945392229"
+      # Optional — set these in the Render dashboard if needed:
+      # - key: GUILD_ID
+      # - key: STAFF_ROLE_ID
+      # - key: CLOSE_PING_ROLE_ID
