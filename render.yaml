@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: emirates-support-bot
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: SUPPORT_CHANNEL_ID
+        value: "1549096181903401130"
+      - key: GENERAL_ROLE_IDS
+        value: "1449091238107283639,1473706134467510364"
+      - key: PARTNERSHIP_ROLE_IDS
+        value: "1468302255181529295,1475109255945392229"
