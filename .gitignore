@@ -1,5 +1,0 @@
-node_modules/
-tickets.json
-.env
-__pycache__/
-*.pyc
