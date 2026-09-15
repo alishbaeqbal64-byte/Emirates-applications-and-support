@@ -5,6 +5,7 @@ import {
   ButtonStyle,
   Client,
   ContainerBuilder,
+  EmbedBuilder,
   Events,
   GatewayIntentBits,
   MessageFlags,
@@ -23,6 +24,19 @@ if (!token) {
   throw new Error('Missing DISCORD_TOKEN in environment.');
 }
 
+const CATEGORIES = {
+  general: {
+    label: 'General Support',
+    emoji: '<:support:1428415390794514584>',
+    buttonEmoji: { name: 'support', id: '1428415390794514584' }
+  },
+  partnership: {
+    label: 'Partnership Request',
+    emoji: '🤝',
+    buttonEmoji: '🤝'
+  }
+};
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.DirectMessages, GatewayIntentBits.MessageContent],
   partials: [Partials.Channel]
@@ -30,6 +44,7 @@ const client = new Client({
 
 const supportTicketsByUser = new Map();
 const supportTicketsByThread = new Map();
+const pendingCategorySelect = new Set();
 
 client.once(Events.ClientReady, readyClient => {
   console.log(`Logged in as ${readyClient.user.tag}`);
@@ -60,6 +75,11 @@ function supportColor(ticket) {
   return SUPPORT_COLORS.unclaimed;
 }
 
+function categoryLine(type) {
+  const category = CATEGORIES[type];
+  return `${category.emoji} **${category.label}**`;
+}
+
 function buildSupportActions(userId, ticket) {
   if (ticket.status === 'closed') return [];
 
@@ -71,6 +91,41 @@ function buildSupportActions(userId, ticket) {
   return [row];
 }
 
+function buildCategorySelectContainer() {
+  return new ContainerBuilder()
+    .setAccentColor(SUPPORT_COLORS.relay)
+    .addTextDisplayComponents(
+      text(
+        '<:Emiratesnewtail:1480910652427079680> Emirates الإمارات • __Welcome to the Emirates Customer Service Centre.__\n\n' +
+          'How can our support team assist you today? Please select the type of your request below, then describe your issue.\n\n' +
+          '<:support:1428415390794514584> **Emirates Airways Customer Service**\n' +
+          '-# **Fly Better**'
+      )
+    );
+}
+
+function buildCategorySelectActions() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('support_category:general').setLabel('General Support').setStyle(ButtonStyle.Primary).setEmoji(CATEGORIES.general.buttonEmoji),
+    new ButtonBuilder().setCustomId('support_category:partnership').setLabel('Partnership Request').setStyle(ButtonStyle.Secondary).setEmoji(CATEGORIES.partnership.buttonEmoji)
+  );
+}
+
+function buildSupportWelcomeContainer() {
+  return new ContainerBuilder()
+    .setAccentColor(SUPPORT_COLORS.relay)
+    .addTextDisplayComponents(
+      text(
+        '<:Emiratesnewtail:1480910652427079680> Emirates الإمارات • __We have received your message and are connecting you with a customer service agent.__\n\n' +
+          'Hello and welcome to <:support:1428415390794514584> **Emirates Customer Service Centre.**\n\n' +
+          'Thank you for contacting us. A member of our support team will be with you shortly to assist you as quickly and efficiently as possible.\n\n' +
+          'Please enter your issue so our support team can assist you.\n\n' +
+          '<:support:1428415390794514584> **Emirates Airways Customer Service**\n' +
+          '-# **Fly Better**'
+      )
+    );
+}
+
 function buildSupportRequestContainer(user, content, ticket) {
   return new ContainerBuilder()
     .setAccentColor(supportColor(ticket))
@@ -78,25 +133,11 @@ function buildSupportRequestContainer(user, content, ticket) {
       text(
         `**Emirates Support Request**\n` +
           `Passenger: <@${user.id}>\n` +
+          `Request Type: ${categoryLine(ticket.type)}\n` +
           `Status: ${supportStatusText(ticket)}\n` +
-          `Ping: ${SUPPORT_PING_ROLE_IDS.map(id => `<@&${id}>`).join(' ')}\n\n` +
+          `Ping: ${SUPPORT_PING_ROLE_IDS[ticket.type].map(id => `<@&${id}>`).join(' ')}\n\n` +
           `**Message**\n${content}\n\n` +
           `${displayTime()}`
-      )
-    );
-}
-
-function buildSupportConnectingContainer() {
-  return new ContainerBuilder()
-    .setAccentColor(SUPPORT_COLORS.relay)
-    .addTextDisplayComponents(
-      text(
-        '**Emirates Airways** • __We have received your message and are connecting you with a customer service agent.__\n\n' +
-          'Hello and welcome to **Emirates Customer Service Centre**.\n\n' +
-          'Thank you for contacting us. A member of our support team will be with you shortly to assist you as quickly and efficiently as possible.\n\n' +
-          'Please enter your issue so our support team can assist you.\n\n' +
-          '**Emirates Airways Customer Service**\n' +
-          '-# **BEYOND BORDERS**'
       )
     );
 }
@@ -113,10 +154,16 @@ function buildSupportClosedContainer() {
     .addTextDisplayComponents(text('Your Emirates support request has been closed. Thank you for contacting us.'));
 }
 
-function buildRelayContainer(authorName, content) {
-  return new ContainerBuilder()
-    .setAccentColor(SUPPORT_COLORS.relay)
-    .addTextDisplayComponents(text(`**${authorName}**\n${content}\n\n${displayTime()}`));
+function buildRelayEmbed(authorName, avatarUrl, content) {
+  return new EmbedBuilder()
+    .setColor(SUPPORT_COLORS.relay)
+    .setAuthor({ name: authorName, iconURL: avatarUrl })
+    .setDescription(content)
+    .setTimestamp();
+}
+
+function buildSystemRelayEmbed(content) {
+  return buildRelayEmbed('Emirates Support', client.user.displayAvatarURL(), content);
 }
 
 async function updateSupportRequestMessage(ticket, content) {
@@ -131,13 +178,22 @@ async function updateSupportRequestMessage(ticket, content) {
   });
 }
 
-async function createSupportRequest(message) {
+async function sendCategorySelect(message) {
+  pendingCategorySelect.add(message.author.id);
+  await message.reply({
+    components: [buildCategorySelectContainer(), buildCategorySelectActions()],
+    flags: MessageFlags.IsComponentsV2
+  });
+}
+
+async function createSupportRequest(user, type) {
   const supportChannel = await client.channels.fetch(SUPPORT_REQUESTS_CHANNEL_ID);
   if (!supportChannel?.isTextBased()) throw new Error('Support requests channel is not a text channel.');
 
   const ticket = {
-    userId: message.author.id,
-    userTag: message.author.tag,
+    userId: user.id,
+    userTag: user.tag,
+    type,
     requestMessageId: null,
     threadId: null,
     claimedBy: null,
@@ -146,7 +202,7 @@ async function createSupportRequest(message) {
   };
 
   const requestMessage = await supportChannel.send({
-    components: [buildSupportRequestContainer(message.author, 'Waiting for passenger issue.', ticket), ...buildSupportActions(message.author.id, ticket)],
+    components: [buildSupportRequestContainer(user, 'Waiting for passenger issue.', ticket), ...buildSupportActions(user.id, ticket)],
     flags: MessageFlags.IsComponentsV2
   });
 
@@ -156,27 +212,25 @@ async function createSupportRequest(message) {
     autoArchiveDuration: 1440
   });
   ticket.threadId = thread.id;
-  supportTicketsByUser.set(message.author.id, ticket);
-  supportTicketsByThread.set(thread.id, message.author.id);
+  supportTicketsByUser.set(user.id, ticket);
+  supportTicketsByThread.set(thread.id, user.id);
 
   await thread.send({
-    components: [buildRelayContainer('Emirates Support', `Support request opened for ${message.author.tag}. Waiting for the passenger issue.`)],
-    flags: MessageFlags.IsComponentsV2
+    embeds: [buildSystemRelayEmbed(`Support request opened for ${user.tag} (${CATEGORIES[type].label}). Waiting for the passenger issue.`)]
   });
-  await message.reply({ components: [buildSupportConnectingContainer()], flags: MessageFlags.IsComponentsV2 });
 }
 
 async function forwardUserMessageToSupport(message, ticket, content) {
   if (ticket.status === 'closed') {
     supportTicketsByUser.delete(message.author.id);
-    await createSupportRequest(message);
+    await sendCategorySelect(message);
     return;
   }
 
   if (ticket.threadId) {
     const thread = await client.channels.fetch(ticket.threadId);
     if (!thread?.isTextBased()) throw new Error('Saved support thread is not a text channel.');
-    await thread.send({ components: [buildRelayContainer(message.author.tag, content)], flags: MessageFlags.IsComponentsV2 });
+    await thread.send({ embeds: [buildRelayEmbed(message.author.tag, message.author.displayAvatarURL(), content)] });
     await updateSupportRequestMessage(ticket, content).catch(() => null);
     return;
   }
@@ -184,8 +238,7 @@ async function forwardUserMessageToSupport(message, ticket, content) {
   const supportChannel = await client.channels.fetch(SUPPORT_REQUESTS_CHANNEL_ID);
   if (!supportChannel?.isTextBased()) throw new Error('Support requests channel is not a text channel.');
   await supportChannel.send({
-    components: [buildRelayContainer(`${message.author.tag} added a message`, content)],
-    flags: MessageFlags.IsComponentsV2
+    embeds: [buildRelayEmbed(`${message.author.tag} added a message`, message.author.displayAvatarURL(), content)]
   });
   await message.reply('Your message has been added to your support request. Please wait while we connect you to an agent.');
 }
@@ -198,7 +251,11 @@ client.on(Events.MessageCreate, async message => {
       const content = messageTextWithAttachments(message);
       const ticket = supportTicketsByUser.get(message.author.id);
       if (!ticket) {
-        await createSupportRequest(message);
+        if (pendingCategorySelect.has(message.author.id)) {
+          await message.reply('Please select your request type using the buttons above so we can connect you with the right team.');
+          return;
+        }
+        await sendCategorySelect(message);
         return;
       }
       await forwardUserMessageToSupport(message, ticket, content);
@@ -213,8 +270,7 @@ client.on(Events.MessageCreate, async message => {
 
     const user = await client.users.fetch(userId);
     await user.send({
-      components: [buildRelayContainer(message.member?.displayName ?? message.author.username, messageTextWithAttachments(message))],
-      flags: MessageFlags.IsComponentsV2
+      embeds: [buildRelayEmbed(message.member?.displayName ?? message.author.username, message.author.displayAvatarURL(), messageTextWithAttachments(message))]
     });
   } catch (error) {
     console.error(error);
@@ -223,6 +279,23 @@ client.on(Events.MessageCreate, async message => {
 
 client.on(Events.InteractionCreate, async interaction => {
   try {
+    if (interaction.isButton() && interaction.customId.startsWith('support_category:')) {
+      const type = interaction.customId.split(':')[1];
+      if (!CATEGORIES[type]) {
+        await interaction.update({ content: 'Unknown request type.', components: [] });
+        return;
+      }
+      if (supportTicketsByUser.has(interaction.user.id)) {
+        await interaction.reply({ content: 'You already have an open support request. Please continue there.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      pendingCategorySelect.delete(interaction.user.id);
+      await interaction.update({ components: [buildSupportWelcomeContainer()] });
+      await createSupportRequest(interaction.user, type);
+      return;
+    }
+
     if (interaction.isButton() && interaction.customId.startsWith('support_close_confirm:')) {
       const userId = interaction.customId.split(':')[1];
       const ticket = supportTicketsByUser.get(userId);
@@ -244,8 +317,7 @@ client.on(Events.InteractionCreate, async interaction => {
         const thread = await client.channels.fetch(ticket.threadId).catch(() => null);
         if (thread?.isTextBased()) {
           await thread.send({
-            components: [buildRelayContainer('Emirates Support', `Closed by <@${interaction.user.id}>.`)],
-            flags: MessageFlags.IsComponentsV2
+            embeds: [buildSystemRelayEmbed(`Closed by <@${interaction.user.id}>.`)]
           });
           await thread.setArchived(true).catch(() => null);
         }
@@ -305,8 +377,7 @@ client.on(Events.InteractionCreate, async interaction => {
         flags: MessageFlags.IsComponentsV2
       });
       await thread.send({
-        components: [buildRelayContainer('Emirates Support', `Claimed by <@${interaction.user.id}>. Messages sent here will be relayed to ${user}.`)],
-        flags: MessageFlags.IsComponentsV2
+        embeds: [buildSystemRelayEmbed(`Claimed by <@${interaction.user.id}>. Messages sent here will be relayed to ${user}.`)]
       });
       await user.send({ components: [buildSupportConnectedContainer(interaction.user)], flags: MessageFlags.IsComponentsV2 });
     }
