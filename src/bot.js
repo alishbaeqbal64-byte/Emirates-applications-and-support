@@ -10,7 +10,11 @@ import {
   MessageFlags,
   Partials
 } from 'discord.js';
-import { SUPPORT_COLORS, SUPPORT_PING_ROLE_ID, SUPPORT_REQUESTS_CHANNEL_ID } from './config.js';
+import {
+  SUPPORT_COLORS,
+  SUPPORT_PING_ROLE_IDS,
+  SUPPORT_REQUESTS_CHANNEL_ID
+} from './config.js';
 import { text } from './utils/components.js';
 
 const token = process.env.DISCORD_TOKEN;
@@ -75,7 +79,7 @@ function buildSupportRequestContainer(user, content, ticket) {
         `**Emirates Support Request**\n` +
           `Passenger: <@${user.id}>\n` +
           `Status: ${supportStatusText(ticket)}\n` +
-          `Ping: <@&${SUPPORT_PING_ROLE_ID}>\n\n` +
+          `Ping: ${SUPPORT_PING_ROLE_IDS.map(id => `<@&${id}>`).join(' ')}\n\n` +
           `**Message**\n${content}\n\n` +
           `${displayTime()}`
       )
