@@ -8,5 +8,6 @@ export const SUPPORT_COLORS = {
   unclaimed: 0x808080,
   inProgress: 0xffcc00,
   closed: 0x2ecc71,
-  relay: 0x1c2a33
+  relay: 0x1c2a33,
+  welcome: 0xff0000
 };

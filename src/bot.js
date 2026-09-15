@@ -32,8 +32,8 @@ const CATEGORIES = {
   },
   partnership: {
     label: 'Partnership Request',
-    emoji: '🤝',
-    buttonEmoji: '🤝'
+    emoji: '<:handshake:1374010015911776376>',
+    buttonEmoji: { name: 'handshake', id: '1374010015911776376' }
   }
 };
 
@@ -93,12 +93,12 @@ function buildSupportActions(userId, ticket) {
 
 function buildCategorySelectContainer() {
   return new ContainerBuilder()
-    .setAccentColor(SUPPORT_COLORS.relay)
+    .setAccentColor(SUPPORT_COLORS.welcome)
     .addTextDisplayComponents(
       text(
         '<:Emiratesnewtail:1480910652427079680> Emirates الإمارات • __Welcome to the Emirates Customer Service Centre.__\n\n' +
           'How can our support team assist you today? Please select the type of your request below, then describe your issue.\n\n' +
-          '<:support:1428415390794514584> **Emirates Airways Customer Service**\n' +
+          '<:support:1428415390794514584> **Emirates Customer Service**\n' +
           '-# **Fly Better**'
       )
     );
@@ -106,21 +106,21 @@ function buildCategorySelectContainer() {
 
 function buildCategorySelectActions() {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('support_category:general').setLabel('General Support').setStyle(ButtonStyle.Primary).setEmoji(CATEGORIES.general.buttonEmoji),
-    new ButtonBuilder().setCustomId('support_category:partnership').setLabel('Partnership Request').setStyle(ButtonStyle.Secondary).setEmoji(CATEGORIES.partnership.buttonEmoji)
+    new ButtonBuilder().setCustomId('support_category:general').setLabel('General Support').setStyle(ButtonStyle.Danger).setEmoji(CATEGORIES.general.buttonEmoji),
+    new ButtonBuilder().setCustomId('support_category:partnership').setLabel('Partnership Request').setStyle(ButtonStyle.Danger).setEmoji(CATEGORIES.partnership.buttonEmoji)
   );
 }
 
 function buildSupportWelcomeContainer() {
   return new ContainerBuilder()
-    .setAccentColor(SUPPORT_COLORS.relay)
+    .setAccentColor(SUPPORT_COLORS.welcome)
     .addTextDisplayComponents(
       text(
         '<:Emiratesnewtail:1480910652427079680> Emirates الإمارات • __We have received your message and are connecting you with a customer service agent.__\n\n' +
           'Hello and welcome to <:support:1428415390794514584> **Emirates Customer Service Centre.**\n\n' +
           'Thank you for contacting us. A member of our support team will be with you shortly to assist you as quickly and efficiently as possible.\n\n' +
           'Please enter your issue so our support team can assist you.\n\n' +
-          '<:support:1428415390794514584> **Emirates Airways Customer Service**\n' +
+          '<:support:1428415390794514584> **Emirates Customer Service**\n' +
           '-# **Fly Better**'
       )
     );
