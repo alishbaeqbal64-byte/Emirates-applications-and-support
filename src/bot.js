@@ -298,11 +298,11 @@ client.on(Events.InteractionCreate, async interaction => {
           await interaction.reply({ content: 'You have already submitted an application. Please wait for its outcome before applying again.', flags: MessageFlags.Ephemeral });
           return;
         }
-        await interaction.update({ components: [applications.buildApplicationIntroContainer()] });
+        await interaction.update({ components: [applications.buildApplicationIntroContainer()], flags: MessageFlags.IsComponentsV2 });
         return;
       }
 
-      await interaction.update({ components: [buildSupportWelcomeContainer()] });
+      await interaction.update({ components: [buildSupportWelcomeContainer()], flags: MessageFlags.IsComponentsV2 });
       await createSupportRequest(interaction.user, type);
       return;
     }

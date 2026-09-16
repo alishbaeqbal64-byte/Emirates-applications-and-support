@@ -386,7 +386,7 @@ export async function handleInteraction(interaction) {
     if (action === 'first') form.firstDepartment = department;
     else form.secondDepartment = department;
     form.stepIndex += 1;
-    await interaction.update({ components: [buildAckContainer(`Selected **${department ?? 'no second choice'}** — thank you.`)] });
+    await interaction.update({ components: [buildAckContainer(`Selected **${department ?? 'no second choice'}** — thank you.`)], flags: MessageFlags.IsComponentsV2 });
     await sendStep(interaction.user, form);
     return true;
   }
@@ -394,15 +394,15 @@ export async function handleInteraction(interaction) {
   if (action === 'commit') {
     const form = formsByUser.get(interaction.user.id);
     if (!form) {
-      await interaction.update({ components: [buildAckContainer('This application has already been completed or cancelled.')] });
+      await interaction.update({ components: [buildAckContainer('This application has already been completed or cancelled.')], flags: MessageFlags.IsComponentsV2 });
       return true;
     }
     if (value === 'no') {
       formsByUser.delete(interaction.user.id);
-      await interaction.update({ components: [buildCancelledContainer()] });
+      await interaction.update({ components: [buildCancelledContainer()], flags: MessageFlags.IsComponentsV2 });
       return true;
     }
-    await interaction.update({ components: [buildAckContainer('Submitting your application — thank you for your patience.')] });
+    await interaction.update({ components: [buildAckContainer('Submitting your application — thank you for your patience.')], flags: MessageFlags.IsComponentsV2 });
     await submitApplication(interaction.user, form);
     return true;
   }
@@ -415,7 +415,7 @@ export async function handleInteraction(interaction) {
 
   if (action === 'review' || action === 'shortlist') {
     record.status = action === 'review' ? 'review' : 'shortlisted';
-    await interaction.update({ components: buildApplicationCardComponents(record) });
+    await interaction.update({ components: buildApplicationCardComponents(record), flags: MessageFlags.IsComponentsV2 });
     await client.users.fetch(record.userId).then(user => user.send({ components: [buildStatusNoticeContainer(record.status)], flags: MessageFlags.IsComponentsV2 })).catch(() => null);
     return true;
   }
@@ -423,7 +423,7 @@ export async function handleInteraction(interaction) {
   if (action === 'reject') {
     record.status = 'rejected';
     record.closedBy = interaction.user.id;
-    await interaction.update({ components: buildApplicationCardComponents(record) });
+    await interaction.update({ components: buildApplicationCardComponents(record), flags: MessageFlags.IsComponentsV2 });
     await archiveInterviewThread(record);
     await client.users.fetch(record.userId).then(user => user.send({ components: [buildStatusNoticeContainer('rejected')], flags: MessageFlags.IsComponentsV2 })).catch(() => null);
     applicationsByUser.delete(record.userId);
@@ -438,7 +438,7 @@ export async function handleInteraction(interaction) {
     record.status = 'interview';
     record.threadId = thread.id;
     interviewThreads.set(thread.id, record.userId);
-    await interaction.update({ components: buildApplicationCardComponents(record) });
+    await interaction.update({ components: buildApplicationCardComponents(record), flags: MessageFlags.IsComponentsV2 });
     await thread.send({
       embeds: [buildRelayEmbed('Emirates HR', client.user.displayAvatarURL(), `Interview started for <@${record.userId}> (first choice: **${record.firstDepartment ?? '—'}**). Messages sent here are relayed to the applicant.`)]
     });
@@ -449,7 +449,7 @@ export async function handleInteraction(interaction) {
   if (action === 'end') {
     record.status = 'interview_done';
     record.closedBy = interaction.user.id;
-    await interaction.update({ components: buildApplicationCardComponents(record) });
+    await interaction.update({ components: buildApplicationCardComponents(record), flags: MessageFlags.IsComponentsV2 });
     await archiveInterviewThread(record);
     await client.users.fetch(record.userId).then(user => user.send({ components: [buildStatusNoticeContainer('interviewEnd')], flags: MessageFlags.IsComponentsV2 })).catch(() => null);
     return true;
