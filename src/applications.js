@@ -10,6 +10,7 @@ import {
 import {
   APPLICATIONS_CHANNEL_ID,
   APPLICATION_COLORS,
+  APPLICATION_PING_ROLE_IDS,
   DEPARTMENTS,
   SUPPORT_COLORS
 } from './config.js';
@@ -103,10 +104,12 @@ function buildQuestionContainer(form) {
     );
 }
 
-function departmentButtons(prefix, withSkip) {
+function departmentButtons(prefix, withSkip, disabledDepartment) {
   const row = new ActionRowBuilder();
   DEPARTMENTS.forEach((department, index) => {
-    row.addComponents(new ButtonBuilder().setCustomId(`${prefix}:${index}`).setLabel(department).setStyle(ButtonStyle.Danger));
+    const button = new ButtonBuilder().setCustomId(`${prefix}:${index}`).setLabel(department).setStyle(ButtonStyle.Danger);
+    if (disabledDepartment && department === disabledDepartment) button.setDisabled(true);
+    row.addComponents(button);
   });
   const rows = [row];
   if (withSkip) {
@@ -186,10 +189,25 @@ function buildAcceptedContainer(user, department) {
     .setAccentColor(APPLICATION_COLORS.accepted)
     .addTextDisplayComponents(
       text(
-        `${EMOJI_TAIL} Emirates الإمارات • __Congratulations — your application has been accepted.__\n\n` +
+        `${EMOJI_TAIL} Emirates الإمارات • __Congratulations — your application has been accepted!__\n\n` +
           `Hello <@${user.id}>,\n\n` +
-          `Following your application and interview for **Batch 01**, you have been selected to join the Emirates team${department ? ` as **${department}**` : ''}.\n\n` +
-          'Welcome aboard. The Emirates Applicant Pathway and your required training will begin shortly — we look forward to flying with you.\n\n' +
+          `Following your application and interview for **Batch 01**, you have been selected to join the Emirates team${department ? ` as **${department}**` : ''}!\n\n` +
+          'Welcome aboard! The Emirates Applicant Pathway and your required training will begin shortly — we look forward to flying with you!\n\n' +
+          FOOTER
+      )
+    );
+}
+
+function buildDeclinedContainer(user, reason) {
+  return new ContainerBuilder()
+    .setAccentColor(APPLICATION_COLORS.rejected)
+    .addTextDisplayComponents(
+      text(
+        `${EMOJI_TAIL} Emirates الإمارات • __Application decision__\n\n` +
+          `Hello <@${user.id}>,\n\n` +
+          'Thank you for your interest in the Emirates staff team. After careful review of your application and interview for **Batch 01**, we are unable to accept your application at this time.\n\n' +
+          (reason ? `**HR note:** ${reason}\n\n` : '') +
+          'We genuinely appreciate the time you invested, and you are welcome to apply again for a future batch.\n\n' +
           FOOTER
       )
     );
@@ -226,6 +244,7 @@ function buildApplicationCardComponents(record) {
     `**Emirates Staff Application — Batch 01**\n` +
       `Applicant: <@${record.userId}> • \`${record.userTag}\` • ID: ${record.userId}\n` +
       `First choice: ${record.firstDepartment ?? '—'} • Second choice: ${record.secondDepartment ?? '—'}\n` +
+      `Ping: ${APPLICATION_PING_ROLE_IDS.map(id => `<@&${id}>`).join(' ')}\n` +
       `Status: **${STATUS_TEXT[record.status]}**\n` +
       `Submitted: <t:${Math.floor(record.submittedAt / 1000)}:f>`
   );
@@ -258,7 +277,7 @@ async function sendStep(user, form) {
   }
   if (step.kind === 'first' || step.kind === 'second') {
     await user.send({
-      components: [buildDepartmentContainer(step.kind, form.stepIndex + 1), ...departmentButtons(`app_${step.kind}`, step.kind === 'second')],
+      components: [buildDepartmentContainer(step.kind, form.stepIndex + 1), ...departmentButtons(`app_${step.kind}`, step.kind === 'second', step.kind === 'second' ? form.firstDepartment : null)],
       flags: MessageFlags.IsComponentsV2
     });
     return;
@@ -516,7 +535,39 @@ export async function handleAcceptCommand(interaction) {
   await interaction.reply({ content: `Acceptance sent to ${user}${department ? ` (${department})` : ''}.`, flags: MessageFlags.Ephemeral });
 }
 
+export const declineCommand = new SlashCommandBuilder()
+  .setName('decline')
+  .setDescription('Notify an applicant their application has been declined')
+  .addUserOption(option => option.setName('user').setDescription('Applicant to decline').setRequired(true))
+  .addStringOption(option =>
+    option
+      .setName('reason')
+      .setDescription('Optional short note to include in the DM')
+      .setRequired(false)
+  )
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages);
+
+export async function handleDeclineCommand(interaction) {
+  const user = interaction.options.getUser('user', true);
+  const reason = interaction.options.getString('reason')?.trim();
+
+  const sent = await user.send({ components: [buildDeclinedContainer(user, reason)], flags: MessageFlags.IsComponentsV2 }).catch(() => null);
+  if (!sent) {
+    await interaction.reply({ content: `Could not DM ${user} — they may have DMs closed.`, flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const record = applicationsByUser.get(user.id);
+  if (record) {
+    record.status = 'rejected';
+    record.closedBy = interaction.user.id;
+    await updateApplicationCard(record).catch(() => null);
+    applicationsByUser.delete(user.id);
+  }
+  await interaction.reply({ content: `Decline sent to ${user.tag}.${reason ? ' Reason included.' : ''}`, flags: MessageFlags.Ephemeral });
+}
+
 export async function registerApplicationCommands(readyClient) {
-  const command = acceptCommand.toJSON();
-  await Promise.all(readyClient.guilds.cache.map(guild => guild.commands.set([command])));
+  const commands = [acceptCommand.toJSON(), declineCommand.toJSON()];
+  await Promise.all(readyClient.guilds.cache.map(guild => guild.commands.set(commands)));
 }

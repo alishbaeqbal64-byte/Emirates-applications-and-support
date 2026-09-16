@@ -12,6 +12,7 @@ export const SUPPORT_COLORS = {
   welcome: 0xff0000
 };
 export const APPLICATIONS_CHANNEL_ID = process.env.APPLICATIONS_CHANNEL_ID ?? '';
+export const APPLICATION_PING_ROLE_IDS = ['1449091238107283639', '1473706134467510364'];
 export const DEPARTMENTS = ['Pilots', 'Cabin Crew', 'Ground Crew', 'ATC', 'Management'];
 export const APPLICATION_COLORS = {
   submitted: 0x808080,

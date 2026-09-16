@@ -278,6 +278,11 @@ client.on(Events.InteractionCreate, async interaction => {
       return;
     }
 
+    if (interaction.isChatInputCommand() && interaction.commandName === 'decline') {
+      await applications.handleDeclineCommand(interaction);
+      return;
+    }
+
     if (await applications.handleInteraction(interaction)) return;
 
     if (interaction.isButton() && interaction.customId.startsWith('support_category:')) {
