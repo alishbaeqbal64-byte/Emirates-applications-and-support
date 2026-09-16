@@ -191,8 +191,8 @@ function buildAcceptedContainer(user, department) {
       text(
         `${EMOJI_TAIL} Emirates الإمارات • __Congratulations — your application has been accepted!__\n\n` +
           `Hello <@${user.id}>,\n\n` +
-          `Following your application and interview for **Batch 01**, you have been selected to join the Emirates team${department ? ` as **${department}**` : ''}!\n\n` +
-          'Welcome aboard! The Emirates Applicant Pathway and your required training will begin shortly — we look forward to flying with you!\n\n' +
+          `Following your application and interview for **Batch 01**, you have been selected to join the Emirates team${department ? ` as **${department}**` : ''}.\n\n` +
+          'Welcome aboard the Emirates Applicant Pathway and your required training will begin shortly — we look forward to flying with you!\n\n' +
           FOOTER
       )
     );
