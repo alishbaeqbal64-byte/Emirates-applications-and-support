@@ -11,3 +11,14 @@ export const SUPPORT_COLORS = {
   relay: 0x1c2a33,
   welcome: 0xff0000
 };
+export const APPLICATIONS_CHANNEL_ID = process.env.APPLICATIONS_CHANNEL_ID ?? '';
+export const DEPARTMENTS = ['Pilots', 'Cabin Crew', 'Ground Crew', 'ATC', 'Management'];
+export const APPLICATION_COLORS = {
+  submitted: 0x808080,
+  review: 0xffcc00,
+  shortlisted: 0x3498db,
+  interview: 0x9b59b6,
+  interview_done: 0x9b59b6,
+  accepted: 0x2ecc71,
+  rejected: 0xff0000
+};

@@ -5,7 +5,6 @@ import {
   ButtonStyle,
   Client,
   ContainerBuilder,
-  EmbedBuilder,
   Events,
   GatewayIntentBits,
   MessageFlags,
@@ -16,7 +15,8 @@ import {
   SUPPORT_PING_ROLE_IDS,
   SUPPORT_REQUESTS_CHANNEL_ID
 } from './config.js';
-import { text } from './utils/components.js';
+import { text, messageTextWithAttachments, buildRelayEmbed } from './utils/components.js';
+import * as applications from './applications.js';
 
 const token = process.env.DISCORD_TOKEN;
 
@@ -42,22 +42,16 @@ const client = new Client({
   partials: [Partials.Channel]
 });
 
+applications.initApplications(client);
+
 const supportTicketsByUser = new Map();
 const supportTicketsByThread = new Map();
 const pendingCategorySelect = new Set();
 
 client.once(Events.ClientReady, readyClient => {
   console.log(`Logged in as ${readyClient.user.tag}`);
+  applications.registerApplicationCommands(readyClient).catch(error => console.error('Failed to register application commands:', error));
 });
-
-function messageTextWithAttachments(message) {
-  const parts = [];
-  if (message.content) parts.push(message.content);
-  for (const attachment of message.attachments.values()) {
-    parts.push(attachment.url);
-  }
-  return parts.join('\n') || '(No text content)';
-}
 
 function displayTime() {
   return `<t:${Math.floor(Date.now() / 1000)}:f>`;
@@ -97,7 +91,7 @@ function buildCategorySelectContainer() {
     .addTextDisplayComponents(
       text(
         '<:Emiratesnewtail:1480910652427079680> Emirates الإمارات • __Welcome to the Emirates Customer Service Centre.__\n\n' +
-          'How can our support team assist you today? Please select the type of your request below, then describe your issue.\n\n' +
+          'How can our team assist you today? Select an option below to continue — general support, a partnership request, or a Batch 01 staff application.\n\n' +
           '<:support:1428415390794514584> **Emirates Customer Service**\n' +
           '-# **Fly Better**'
       )
@@ -107,7 +101,8 @@ function buildCategorySelectContainer() {
 function buildCategorySelectActions() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('support_category:general').setLabel('General Support').setStyle(ButtonStyle.Danger).setEmoji(CATEGORIES.general.buttonEmoji),
-    new ButtonBuilder().setCustomId('support_category:partnership').setLabel('Partnership Request').setStyle(ButtonStyle.Danger).setEmoji(CATEGORIES.partnership.buttonEmoji)
+    new ButtonBuilder().setCustomId('support_category:partnership').setLabel('Partnership Request').setStyle(ButtonStyle.Danger).setEmoji(CATEGORIES.partnership.buttonEmoji),
+    new ButtonBuilder().setCustomId('support_category:apply').setLabel('Staff Application').setStyle(ButtonStyle.Danger).setEmoji('📝')
   );
 }
 
@@ -117,7 +112,7 @@ function buildSupportWelcomeContainer() {
     .addTextDisplayComponents(
       text(
         '<:Emiratesnewtail:1480910652427079680> Emirates الإمارات • __We have received your message and are connecting you with a customer service agent.__\n\n' +
-          'Hello and welcome to <:support:1428415390794514584> **Emirates Customer Service Centre.**\n\n' +
+          'Hello and welcome to <:support:1428415390794514584> **Emirates Customer Service.**\n\n' +
           'Thank you for contacting us. A member of our support team will be with you shortly to assist you as quickly and efficiently as possible.\n\n' +
           'Please enter your issue so our support team can assist you.\n\n' +
           '<:support:1428415390794514584> **Emirates Customer Service**\n' +
@@ -152,14 +147,6 @@ function buildSupportClosedContainer() {
   return new ContainerBuilder()
     .setAccentColor(SUPPORT_COLORS.closed)
     .addTextDisplayComponents(text('Your Emirates support request has been closed. Thank you for contacting us.'));
-}
-
-function buildRelayEmbed(authorName, avatarUrl, content) {
-  return new EmbedBuilder()
-    .setColor(SUPPORT_COLORS.relay)
-    .setAuthor({ name: authorName, iconURL: avatarUrl })
-    .setDescription(content)
-    .setTimestamp();
 }
 
 function buildSystemRelayEmbed(content) {
@@ -248,30 +235,37 @@ client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
 
     if (!message.guild) {
+      if (await applications.handleFormDm(message)) return;
+
       const content = messageTextWithAttachments(message);
       const ticket = supportTicketsByUser.get(message.author.id);
-      if (!ticket) {
-        if (pendingCategorySelect.has(message.author.id)) {
-          await message.reply('Please select your request type using the buttons above so we can connect you with the right team.');
-          return;
-        }
-        await sendCategorySelect(message);
+      if (ticket) {
+        await forwardUserMessageToSupport(message, ticket, content);
         return;
       }
-      await forwardUserMessageToSupport(message, ticket, content);
+      if (await applications.handleInterviewDm(message)) return;
+
+      if (pendingCategorySelect.has(message.author.id)) {
+        await message.reply('Please select an option using the buttons above so we can connect you with the right team.');
+        return;
+      }
+      await sendCategorySelect(message);
       return;
     }
 
     const userId = supportTicketsByThread.get(message.channel.id);
-    if (!userId) return;
+    if (userId) {
+      const ticket = supportTicketsByUser.get(userId);
+      if (!ticket || ticket.status === 'closed') return;
 
-    const ticket = supportTicketsByUser.get(userId);
-    if (!ticket || ticket.status === 'closed') return;
+      const user = await client.users.fetch(userId);
+      await user.send({
+        embeds: [buildRelayEmbed(message.member?.displayName ?? message.author.username, message.author.displayAvatarURL(), messageTextWithAttachments(message))]
+      });
+      return;
+    }
 
-    const user = await client.users.fetch(userId);
-    await user.send({
-      embeds: [buildRelayEmbed(message.member?.displayName ?? message.author.username, message.author.displayAvatarURL(), messageTextWithAttachments(message))]
-    });
+    await applications.relayInterviewThreadMessage(message);
   } catch (error) {
     console.error(error);
   }
@@ -279,9 +273,16 @@ client.on(Events.MessageCreate, async message => {
 
 client.on(Events.InteractionCreate, async interaction => {
   try {
+    if (interaction.isChatInputCommand() && interaction.commandName === 'accept') {
+      await applications.handleAcceptCommand(interaction);
+      return;
+    }
+
+    if (await applications.handleInteraction(interaction)) return;
+
     if (interaction.isButton() && interaction.customId.startsWith('support_category:')) {
       const type = interaction.customId.split(':')[1];
-      if (!CATEGORIES[type]) {
+      if (type !== 'general' && type !== 'partnership' && type !== 'apply') {
         await interaction.update({ content: 'Unknown request type.', components: [] });
         return;
       }
@@ -291,6 +292,16 @@ client.on(Events.InteractionCreate, async interaction => {
       }
 
       pendingCategorySelect.delete(interaction.user.id);
+      if (type === 'apply') {
+        const result = await applications.startApplication(interaction.user, { sendIntro: false });
+        if (!result.ok) {
+          await interaction.reply({ content: 'You have already submitted an application. Please wait for its outcome before applying again.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        await interaction.update({ components: [applications.buildApplicationIntroContainer()] });
+        return;
+      }
+
       await interaction.update({ components: [buildSupportWelcomeContainer()] });
       await createSupportRequest(interaction.user, type);
       return;
