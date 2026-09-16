@@ -17,7 +17,7 @@ import { text, messageTextWithAttachments, buildRelayEmbed } from './utils/compo
 
 const EMOJI_TAIL = '<:Emiratesnewtail:1480910652427079680>';
 const EMOJI_SUPPORT = '<:support:1428415390794514584>';
-const FOOTER = `${EMOJI_SUPPORT} **Emirates Customer Service**\n-# **Fly Better**`;
+const FOOTER = `${EMOJI_SUPPORT} **Emirates Careers**\n-# **Fly Better**`;
 const APPLY_EMOJI = '📝';
 
 const QUESTIONS = [
