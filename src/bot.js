@@ -256,13 +256,13 @@ client.on(Events.MessageCreate, async message => {
     const userId = supportTicketsByThread.get(message.channel.id);
     if (userId) {
       const ticket = supportTicketsByUser.get(userId);
-      if (!ticket || ticket.status === 'closed') return;
-
-      const user = await client.users.fetch(userId);
-      await user.send({
-        embeds: [buildRelayEmbed(message.member?.displayName ?? message.author.username, message.author.displayAvatarURL(), messageTextWithAttachments(message))]
-      });
-      return;
+      if (ticket && ticket.status !== 'closed') {
+        const user = await client.users.fetch(userId);
+        await user.send({
+          embeds: [buildRelayEmbed(message.member?.displayName ?? message.author.username, message.author.displayAvatarURL(), messageTextWithAttachments(message))]
+        });
+        return;
+      }
     }
 
     await applications.relayInterviewThreadMessage(message);
@@ -320,7 +320,7 @@ client.on(Events.InteractionCreate, async interaction => {
       supportTicketsByUser.delete(userId);
       if (ticket.threadId) supportTicketsByThread.delete(ticket.threadId);
 
-      await updateSupportRequestMessage(ticket, 'Support request closed.');
+      await updateSupportRequestMessage(ticket, 'Support request closed.').catch(() => null);
       const user = await client.users.fetch(userId);
       await user.send({ components: [buildSupportClosedContainer()], flags: MessageFlags.IsComponentsV2 }).catch(() => null);
 

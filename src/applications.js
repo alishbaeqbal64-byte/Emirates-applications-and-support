@@ -27,11 +27,9 @@ const QUESTIONS = [
   { id: 'contribute', label: 'What you can contribute', section: 'Department Preference', prompt: 'What do you believe you can contribute to your chosen department?' },
   { id: 'whyJoin', label: 'Why join Emirates staff', section: 'Motivation & Suitability', prompt: 'Why do you want to join the Emirates staff team?' },
   { id: 'goodStaff', label: 'What makes a good staff member', section: 'Motivation & Suitability', prompt: 'In your view, what makes a good staff member?' },
-  { id: 'responsibilities', label: 'Responsibilities of staff', section: 'Motivation & Suitability', prompt: 'What do you believe the responsibilities of staff are?' },
   { id: 'unknown', label: 'Handling the unknown', section: 'Motivation & Suitability', prompt: 'How would you handle a situation where you do not know what to do?' },
   { id: 'situation1', label: 'Scenario — public conflict', section: 'Situational Questions', prompt: 'Two members are arguing heatedly in a public channel and no other staff members are online. How do you resolve the situation?' },
-  { id: 'situation2', label: 'Scenario — mistake & accountability', section: 'Situational Questions', prompt: 'You make a mistake while performing staff duties that affects a member, and nobody noticed it. What do you do?' },
-  { id: 'situation3', label: 'Scenario — fairness & impartiality', section: 'Situational Questions', prompt: 'A close friend breaks the same rule that a stranger was punished for earlier today. How do you handle it?' }
+  { id: 'situation2', label: 'Scenario — mistake & accountability', section: 'Situational Questions', prompt: 'You make a mistake while performing staff duties that affects a member, and nobody noticed it. What do you do?' }
 ];
 
 const QUESTION_BY_ID = new Map(QUESTIONS.map(question => [question.id, question]));
@@ -45,11 +43,9 @@ const STEPS = [
   { kind: 'text', id: 'contribute' },
   { kind: 'text', id: 'whyJoin' },
   { kind: 'text', id: 'goodStaff' },
-  { kind: 'text', id: 'responsibilities' },
   { kind: 'text', id: 'unknown' },
   { kind: 'text', id: 'situation1' },
   { kind: 'text', id: 'situation2' },
-  { kind: 'text', id: 'situation3' },
   { kind: 'commitment' }
 ];
 
@@ -119,17 +115,18 @@ function departmentButtons(prefix, withSkip) {
   return rows;
 }
 
-function buildDepartmentContainer(form, kind) {
+function buildDepartmentContainer(kind, stepNumber, selected) {
   const isFirst = kind === 'first';
   return new ContainerBuilder()
     .setAccentColor(SUPPORT_COLORS.welcome)
     .addTextDisplayComponents(
       text(
         `${EMOJI_TAIL} Emirates الإمارات • __Batch 01 Staff Application__\n\n` +
-          `**Department Preference** • Step ${form.stepIndex + 1} of ${STEPS.length}\n\n` +
+          `**Department Preference** • Step ${stepNumber} of ${STEPS.length}\n\n` +
           (isFirst
             ? 'Please select your **first-choice department**:'
             : 'Optionally, select your **second-choice department** — or skip this step:') +
+          (selected ? `\n\n✅ Selected: **${selected}**` : '') +
           `\n\n${DEPARTMENTS.map(department => `• ${department}`).join('\n')}`
       )
     );
@@ -201,8 +198,8 @@ function buildAcceptedContainer(user, department) {
 const QA_SECTIONS = [
   { title: 'Applicant Information', ids: ['timezone', 'experience'] },
   { title: 'Department Preference', ids: ['whyDepartment', 'contribute'] },
-  { title: 'Motivation & Suitability', ids: ['whyJoin', 'goodStaff', 'responsibilities', 'unknown'] },
-  { title: 'Situational Questions', ids: ['situation1', 'situation2', 'situation3'] }
+  { title: 'Motivation & Suitability', ids: ['whyJoin', 'goodStaff', 'unknown'] },
+  { title: 'Situational Questions', ids: ['situation1', 'situation2'] }
 ];
 
 function applicationActions(record) {
@@ -261,7 +258,7 @@ async function sendStep(user, form) {
   }
   if (step.kind === 'first' || step.kind === 'second') {
     await user.send({
-      components: [buildDepartmentContainer(form, step.kind), ...departmentButtons(`app_${step.kind}`, step.kind === 'second')],
+      components: [buildDepartmentContainer(step.kind, form.stepIndex + 1), ...departmentButtons(`app_${step.kind}`, step.kind === 'second')],
       flags: MessageFlags.IsComponentsV2
     });
     return;
@@ -385,8 +382,17 @@ export async function handleInteraction(interaction) {
     const department = value === 'skip' ? null : DEPARTMENTS[Number(value)];
     if (action === 'first') form.firstDepartment = department;
     else form.secondDepartment = department;
+    const stepNumber = form.stepIndex + 1;
     form.stepIndex += 1;
-    await interaction.update({ components: [buildAckContainer(`Selected **${department ?? 'no second choice'}** — thank you.`)], flags: MessageFlags.IsComponentsV2 });
+    const disabledRows = departmentButtons(`app_${action}`, action === 'second');
+    disabledRows.forEach(row => row.components.forEach(button => button.setDisabled(true)));
+    await interaction.update({
+      components: [
+        buildDepartmentContainer(action, stepNumber, department ?? (action === 'second' ? 'No second choice' : null)),
+        ...disabledRows
+      ],
+      flags: MessageFlags.IsComponentsV2
+    });
     await sendStep(interaction.user, form);
     return true;
   }
