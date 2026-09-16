@@ -74,7 +74,7 @@ export function initApplications(clientRef) {
 }
 
 function buildAckContainer(content) {
-  return new ContainerBuilder().setAccentColor(SUPPORT_COLORS.welcome).addTextDisplayComponents(text(user));
+  return new ContainerBuilder().setAccentColor(SUPPORT_COLORS.welcome).addTextDisplayComponents(text(content));
 }
 
 export function buildApplicationIntroContainer() {
