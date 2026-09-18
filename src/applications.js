@@ -56,6 +56,8 @@ const STATUS_TEXT = {
   shortlisted: 'Shortlisted',
   interview: 'Interview stage',
   interview_done: 'Interview completed — awaiting selection',
+  further: 'Further application — deeper questions stage',
+  further_done: 'Further application completed — awaiting decision',
   accepted: 'Accepted — Batch 01',
   rejected: 'Rejected'
 };
@@ -175,6 +177,8 @@ function buildStatusNoticeContainer(status) {
   const notices = {
     review: 'Your Batch 01 application is now **under review** by our HR team. Thank you for your patience.',
     shortlisted: 'Great news — your application has been **shortlisted**. Please stand by for a short interview with our team.',
+    further: 'Thank you for your patience — your application has been moved to a **further application** stage. One of our team members will ask you some additional questions about your experience and what you do, so please answer them as best you can. You are now connected: your messages here are relayed to them, and theirs to you.',
+    furtherEnd: 'Your further application stage has concluded. Thank you for your time — the decision on your application for **Batch 01** will follow.',
     rejected: 'Thank you for applying to Emirates staff. After careful review, we are unable to accept your application for **Batch 01** at this time. You are welcome to apply again for a future batch.',
     interviewStart: 'Congratulations — your application has been accepted for the **interview stage**. You are now connected with the Emirates HR team: your messages here are relayed to them, and theirs to you. Please say hello when you are ready.',
     interviewEnd: 'Your interview has concluded. Thank you for your time — selection results for **Batch 01** will follow.'
@@ -229,10 +233,26 @@ function applicationActions(record) {
       )
     ];
   }
+  if (record.status === 'further') {
+    return [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`app_end:${record.userId}`).setLabel('End Further Process').setStyle(ButtonStyle.Secondary)
+      )
+    ];
+  }
+  if (record.status === 'further_done') {
+    return [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`app_interview:${record.userId}`).setLabel('Accept → Interview').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`app_reject:${record.userId}`).setLabel('Reject').setStyle(ButtonStyle.Danger)
+      )
+    ];
+  }
   return [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`app_review:${record.userId}`).setLabel('Under Review').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(`app_shortlist:${record.userId}`).setLabel('Shortlist').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`app_further:${record.userId}`).setLabel('Further Application').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`app_interview:${record.userId}`).setLabel('Accept → Interview').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`app_reject:${record.userId}`).setLabel('Reject').setStyle(ButtonStyle.Danger)
     )
@@ -361,7 +381,7 @@ export async function handleFormDm(message) {
 
 export async function handleInterviewDm(message) {
   const record = applicationsByUser.get(message.author.id);
-  if (!record || record.status !== 'interview' || !record.threadId) return false;
+  if (!record || (record.status !== 'interview' && record.status !== 'further') || !record.threadId) return false;
   const thread = await client.channels.fetch(record.threadId).catch(() => null);
   if (!thread?.isTextBased()) return false;
   await thread.send({ embeds: [buildRelayEmbed(message.author.tag, message.author.displayAvatarURL(), messageTextWithAttachments(message))] });
@@ -382,7 +402,7 @@ async function archiveInterviewThread(record) {
   interviewThreads.delete(record.threadId);
   const thread = await client.channels.fetch(record.threadId).catch(() => null);
   if (thread?.isTextBased()) {
-    await thread.send({ embeds: [buildRelayEmbed('Emirates HR', client.user.displayAvatarURL(), `Interview ended by <@${record.closedBy ?? 'staff'}>.`)] }).catch(() => null);
+    await thread.send({ embeds: [buildRelayEmbed('Emirates HR', client.user.displayAvatarURL(), `This stage has ended — thread archived by <@${record.closedBy ?? 'staff'}>.`)] }).catch(() => null);
     await thread.setArchived(true).catch(() => null);
   }
 }
@@ -471,12 +491,35 @@ export async function handleInteraction(interaction) {
     return true;
   }
 
+  if (action === 'further') {
+    const thread = await interaction.message.startThread({
+      name: `further-${record.userTag}`.replace(/[^a-z0-9-_]/gi, '-').slice(0, 90),
+      autoArchiveDuration: 1440
+    });
+    record.status = 'further';
+    record.threadId = thread.id;
+    interviewThreads.set(thread.id, record.userId);
+    await interaction.update({ components: buildApplicationCardComponents(record), flags: MessageFlags.IsComponentsV2 });
+    await thread.send({
+      embeds: [buildRelayEmbed('Emirates HR', client.user.displayAvatarURL(),
+        `Further application started for <@${record.userId}> (first choice: **${record.firstDepartment ?? '—'}**). Messages sent here are relayed to the applicant.\n\n` +
+        'This stage goes deeper than the normal interview — ask about what they do, not just who they are. Suggested areas:\n' +
+        '• Their experience so far: servers/roles they have been part of and what they actually handled day to day.\n' +
+        '• How they would perform the role in their chosen department — concrete duties, not theory.\n' +
+        '• Availability in practice: when and how often they can genuinely be online.\n' +
+        '• A walk-through of a real task or situation from their past roles.')]
+    });
+    await client.users.fetch(record.userId).then(user => user.send({ components: [buildStatusNoticeContainer('further')], flags: MessageFlags.IsComponentsV2 })).catch(() => null);
+    return true;
+  }
+
   if (action === 'end') {
-    record.status = 'interview_done';
+    const wasFurther = record.status === 'further';
+    record.status = wasFurther ? 'further_done' : 'interview_done';
     record.closedBy = interaction.user.id;
     await interaction.update({ components: buildApplicationCardComponents(record), flags: MessageFlags.IsComponentsV2 });
     await archiveInterviewThread(record);
-    await client.users.fetch(record.userId).then(user => user.send({ components: [buildStatusNoticeContainer('interviewEnd')], flags: MessageFlags.IsComponentsV2 })).catch(() => null);
+    await client.users.fetch(record.userId).then(user => user.send({ components: [buildStatusNoticeContainer(wasFurther ? 'furtherEnd' : 'interviewEnd')], flags: MessageFlags.IsComponentsV2 })).catch(() => null);
     return true;
   }
 

@@ -20,6 +20,8 @@ export const APPLICATION_COLORS = {
   shortlisted: 0x3498db,
   interview: 0x9b59b6,
   interview_done: 0x9b59b6,
+  further: 0xe67e22,
+  further_done: 0xe67e22,
   accepted: 0x2ecc71,
   rejected: 0xff0000
 };
